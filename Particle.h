@@ -11,8 +11,6 @@ public:
 	int xc; //x center of particle
 	int yc; //y center of particle
 	int radius; //radius of particle
-	//double direction; //direction
-	//double velocity; //velocity module
 	double vx;
 	double vy;
 
@@ -21,26 +19,46 @@ public:
 
 
 	Particle(int xpos, int ypos) {
+		double density = 1;
 
 		xc = xpos;
 		yc = ypos;
 
-		radius = (int)cimg::rand(5, 20);
-		vx = cimg::rand(-5, 5);
-		vy = cimg::rand(-5, 5);
+		radius = (int)round(cimg::rand(5,10));
+		vx = cimg::rand(-3, 3);
+		vy = cimg::rand(-3, 3);
 
-		mass = 1;// pow(radius, 2)* cimg::PI;
+		mass = 4.0 / 3.0 * cimg::PI * pow(radius, 3);
 
 		//x:→
-		//y:↓*/
+		//y:↓
 	}
 
-	void move(int delta_time) {
+	void move(int delta_time, double gravity) {
 		vx = vx;
 		vy = vy;
 
-		xc = xc + vx * delta_time;
-		yc = yc + vy * delta_time;
+		xc = round(xc + vx * delta_time);
+		yc = round(yc + vy * delta_time + 0.5 * gravity * pow(delta_time, 2));
+	}
+
+	void updateRadMass(int UD, int changeR) {
+		if (UD == 0) { //Increase
+			radius = radius + changeR;
+			mass = 4.0 / 3.0 * cimg::PI * pow(radius, 3);
+
+		}
+		else { //Lower
+			if (radius - changeR <= 0) {
+				radius = 1;
+				mass = 4.0 / 3.0 * cimg::PI * pow(radius, 3);
+			}
+			else {
+				radius = radius - changeR;
+				mass = 4.0 / 3.0 * cimg::PI * pow(radius, 3);
+			}
+		}
+		
 	}
 
 private:

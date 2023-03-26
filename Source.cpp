@@ -12,23 +12,22 @@ using namespace cimg_library;
 //Functions declared before
 Particle random_Particle(CImg<unsigned char> img, vector<Particle> vPar);
 bool verify_position(Particle newPar, CImg<unsigned char> img, vector<Particle> vPar);
-vector<Particle> collision(vector<Particle> vPar, double dt, CImg<unsigned char> img);
+vector<Particle> collision(vector<Particle> vPar, double dt, CImg<unsigned char> img, double gravity);
 
 
 
 int main() {
 
 	// Initial settings
-	int dt = 2;  //delta_time
+	int dt = 1;  //delta_time
 
-	int redsize = 5; // Reducing particle size
-	int incsize = 5; // Increasing particle size
+	int changeR = 5; // Reducing/Increasing radius particle
 
-	int gravity = 0; // default gravity
-	int deltagrav = 1;
+	double gravity = 0; // default gravity
+	double deltagrav = 0.1;
 
-	unsigned int w = 600; // Image width
-	unsigned int h = 600; // Image height
+	unsigned int w = 500; // Image width
+	unsigned int h = 500; // Image height
 
 	unsigned char red[] = { 255, 0, 0 }; // Color Particle
 
@@ -36,7 +35,7 @@ int main() {
 
 	/*-----------------------------------------------------------*/
 
-	CImg<unsigned char> bg(w, h, 1, 3, 255); // Background white
+	CImg<double> bg(w, h, 1, 3, 255); // Background white
 
 	CImgDisplay dsp(w, h, "Brownian motion", 0); // To display a window
 	dsp.display(bg);
@@ -118,7 +117,7 @@ int main() {
 				vector<Particle> copyVpar = vPar; //copy to check
 				copyVpar.erase(copyVpar.begin() + i);
 				Particle incPar = vPar[i];
-				incPar.radius = incPar.radius + incsize;
+				incPar.radius = incPar.radius + 5;
 
 				vPar[i] = (verify_position(incPar, img, copyVpar)) ? incPar : vPar[i];
 				img.draw_circle(vPar[i].xc, vPar[i].yc, vPar[i].radius, red);
@@ -130,7 +129,7 @@ int main() {
 			std::cout << "I: Decrease size\n";
 			img = bg;
 			for (int i = 0; i < vPar.size(); i++) {
-				vPar[i].radius = (vPar[i].radius - redsize > 0) ? vPar[i].radius - redsize : 1; //if below 1: set 1
+				vPar[i].updateRadMass(1, changeR);
 				img.draw_circle(vPar[i].xc, vPar[i].yc, vPar[i].radius, red);
 			}
 			dsp.set_key(); //avoid multiple clicks: set keyboard key as released
@@ -142,7 +141,7 @@ int main() {
 			img = bg;
 			if (!vPar.empty())
 			{
-				vPar = collision(vPar, dt, img);
+				vPar = collision(vPar, dt, img, gravity);
 				for (int i = 0; i < vPar.size(); i++) {
 					img.draw_circle(vPar[i].xc, vPar[i].yc, vPar[i].radius, red);
 				}
@@ -150,7 +149,8 @@ int main() {
 
 		}
 		// Display
-		dsp.display(img).wait(1000/60); //wait to slow down velocity of rendering
+		dsp.display(img).wait(1000 / 60); //wait to slow down velocity of rendering7
+		cout << "DISPLAY" << endl;
 	};
 
 }
@@ -197,7 +197,7 @@ bool verify_position(Particle newPar, CImg<unsigned char> img, vector<Particle> 
 	return true;
 }
 
-vector<Particle> collision(vector<Particle> vPar, double dt, CImg<unsigned char> img) {
+vector<Particle> collision(vector<Particle> vPar, double dt, CImg<unsigned char> img, double gravity) {
 	//Initialise collision related info
 	double collpartner_1;
 	double collpartner_2;
@@ -210,15 +210,20 @@ vector<Particle> collision(vector<Particle> vPar, double dt, CImg<unsigned char>
 	// Checking collision time with particles in main domain
 	for (int i = 0; i < vPar.size(); i++) {
 		for (int j = i + 1; j < vPar.size(); j++) {
-			int rab[2] = { vPar[i].xc - vPar[j].xc, vPar[i].yc - vPar[j].yc };
-			double vab[2] = { vPar[i].vx - vPar[j].vx, vPar[i].vy - vPar[j].vy };
+			int rab[2] = { vPar[j].xc - vPar[i].xc, vPar[j].yc - vPar[i].yc };
+			double vab[2] = { vPar[j].vx - vPar[i].vx, vPar[j].vy - vPar[i].vy };
 
-			double disc = pow(rab[0] * vab[0] + rab[1] * vab[1], 2) - (vab[0] * vab[0] + vab[1] * vab[1]) * ((rab[0] * rab[0] + rab[1] * rab[1]) - pow(vPar[j].radius + vPar[i].radius, 2));
-			if (disc > 0) { //future collision
-				colltime_particle = (-(rab[0] * vab[0] + rab[1] * vab[1]) - sqrt(disc)) / (pow(vab[0], 2) + pow(vab[1], 2));
-			}
-			else { //collisione passata (<0) o attuale(=0): non la considero
-				colltime_particle = numeric_limits<int>::max(); // no collision
+			double sigma = vPar[i].radius + vPar[j].radius;
+
+			double dvdr = rab[0] * vab[0] + rab[1] * vab[1];
+
+			if (dvdr >= 0) colltime_particle = numeric_limits<int>::max();
+			else {
+				double dvdv = vab[0] * vab[0] + vab[1] * vab[1];
+				double drdr = rab[0] * rab[0] + rab[1] * rab[1];
+				double d = dvdr * dvdr - dvdv * (drdr - sigma * sigma);
+				if (d < 0) colltime_particle = numeric_limits<int>::max();
+				else colltime_particle = -(dvdr + sqrt(d)) / dvdv;
 			}
 
 			if (colltime_particle < colltime && colltime_particle >= 0) { //Collision with particle
@@ -230,8 +235,8 @@ vector<Particle> collision(vector<Particle> vPar, double dt, CImg<unsigned char>
 			}
 		}
 
-		double colltime_R_wallX = (img.width() - 1 - vPar[i].radius - vPar[i].xc) / (vPar[i].vx);
-		if (colltime_R_wallX >= 0 && colltime_R_wallX <= colltime) {
+		double colltime_R_wallX = (img.width() - 1 - vPar[i].radius - vPar[i].xc) / (vPar[i].vx + 1e-20);
+		if (colltime_R_wallX >= 0 && colltime_R_wallX <= colltime && vPar[i].vx>0) {
 			colltime = colltime_R_wallX;
 			collpartner_1 = i;
 			wall = 1;
@@ -239,8 +244,8 @@ vector<Particle> collision(vector<Particle> vPar, double dt, CImg<unsigned char>
 			coll_with_particle = false;
 		}
 
-		double colltime_L_wallX = -(vPar[i].xc - vPar[i].radius) / (vPar[i].vx);
-		if (colltime_L_wallX >= 0 && colltime_L_wallX <= colltime) {
+		double colltime_L_wallX = -(vPar[i].xc - vPar[i].radius) / (vPar[i].vx + 1e-20);
+		if (colltime_L_wallX >= 0 && colltime_L_wallX <= colltime && vPar[i].vx < 0) {
 			colltime = colltime_L_wallX;
 			collpartner_1 = i;
 			wall = 3;
@@ -248,8 +253,8 @@ vector<Particle> collision(vector<Particle> vPar, double dt, CImg<unsigned char>
 			coll_with_particle = false;
 		}
 
-		double colltime_U_wallY = (img.height() - 1 - vPar[i].yc - vPar[i].radius) / (vPar[i].vy); //qua sistemare per moto accelerato
-		if (colltime_U_wallY >= 0 && colltime_U_wallY <= colltime) {
+		double colltime_U_wallY = (img.height() - 1 - vPar[i].yc - vPar[i].radius) / (vPar[i].vy + 1e-20); //qua sistemare per moto accelerato
+		if (colltime_U_wallY >= 0 && colltime_U_wallY <= colltime && vPar[i].vy > 0) {
 			colltime = colltime_U_wallY;
 			collpartner_1 = i;
 			wall = 2;
@@ -257,8 +262,8 @@ vector<Particle> collision(vector<Particle> vPar, double dt, CImg<unsigned char>
 			coll_with_particle = false;
 		}
 
-		double colltime_H_wallY = -(vPar[i].yc - vPar[i].radius) / (vPar[i].vy); //qua sistemare per moto accelerato
-		if (colltime_H_wallY >= 0 && colltime_H_wallY <= colltime) {
+		double colltime_H_wallY = -(vPar[i].yc - vPar[i].radius) / (vPar[i].vy + 1e-20); //qua sistemare per moto accelerato
+		if (colltime_H_wallY >= 0 && colltime_H_wallY <= colltime && vPar[i].vy < 0) {
 			colltime = colltime_H_wallY;
 			collpartner_1 = i;
 			wall = 0;
@@ -267,42 +272,44 @@ vector<Particle> collision(vector<Particle> vPar, double dt, CImg<unsigned char>
 		}
 	}
 
-	if (colltime == 0) {
-		double newcolltime; //calcolo il prossimo tempo di collisione affinchè possa muovere le palline fino ad esso
-
-
+	if (coll_with_particle) {
+		cout << "------------\n";
 		cout << colltime << endl;
-		cout << "COLLTIME ORA: 0\n";
-		cout << "wall:" << coll_with_wall << endl;
-		cout << "parti: " << coll_with_particle << endl;
+		cout << collpartner_1 << endl;
+		cout << collpartner_2 << endl;
+		cout << "VEL1:" << vPar[collpartner_1].vx << "|" << vPar[collpartner_1].vy << endl;
+		cout << "VEL2:" << vPar[collpartner_2].vx << "|" << vPar[collpartner_2].vy << endl;
+		cout << "------------\n";
 		//system("PAUSE");
 	}
 
 	// Update positions and velocities
 	if (colltime < dt) {
 		for (int i = 0; i < vPar.size(); i++) {
-			vPar[i].move(colltime-(1e-5)); //move all particles until first collision: fix here when t collision is 0
+			vPar[i].move(colltime, gravity);
 		}
+		if (coll_with_particle) { 
 
-		if (coll_with_particle) { //Collision with particle
-			double ra[2] = { vPar[collpartner_1].xc, vPar[collpartner_1].yc };
-			double va[2] = { vPar[collpartner_1].vx, vPar[collpartner_1].vy };
-			double rb[2] = { vPar[collpartner_2].xc, vPar[collpartner_2].yc };
-			double vb[2] = { vPar[collpartner_2].vx, vPar[collpartner_2].vy };
+			double dx = vPar[collpartner_2].xc - vPar[collpartner_1].xc;
+			double dy = vPar[collpartner_2].yc - vPar[collpartner_1].yc;
+			double dvx = vPar[collpartner_2].vx - vPar[collpartner_1].vx;
+			double dvy = vPar[collpartner_2].vy - vPar[collpartner_1].vy;
+			double dvdr = dx * dvx + dy * dvy;
+			double dist = vPar[collpartner_1].radius + vPar[collpartner_2].radius;
 
-			double rab[2] = { ra[0] - rb[0], ra[1] - rb[1] };
-			double rab_dot_rab = rab[0] * rab[0] + rab[1] * rab[1];
-			double rab_norm = sqrt(rab_dot_rab);
-			double n[2] = { rab[0] / rab_norm, rab[1] / rab_norm };
+			// magnitude of normal force
+			double magnitude = 2 * vPar[collpartner_1].mass * vPar[collpartner_2].mass * dvdr / ((vPar[collpartner_1].mass + vPar[collpartner_2].mass) * dist);
 
-			// Calculate del_v using array operations
-			double del_v[2] = { n[0] * (va[0] - vb[0]) + n[1] * (va[1] - vb[1]) };
+			// normal force, and in x and y directions
+			double fx = magnitude * dx / dist;
+			double fy = magnitude * dy / dist;
 
-			// Update velocities
-			vPar[collpartner_1].vx -= del_v[0] * 2 * vPar[collpartner_2].mass / (vPar[collpartner_1].mass + vPar[collpartner_2].mass);
-			vPar[collpartner_1].vy -= del_v[1] * 2 * vPar[collpartner_2].mass / (vPar[collpartner_1].mass + vPar[collpartner_2].mass);
-			vPar[collpartner_2].vx += del_v[0] * 2 * vPar[collpartner_1].mass / (vPar[collpartner_1].mass + vPar[collpartner_2].mass);
-			vPar[collpartner_2].vy += del_v[1] * 2 * vPar[collpartner_1].mass / (vPar[collpartner_1].mass + vPar[collpartner_2].mass);
+			// update velocities according to normal force
+			vPar[collpartner_1].vx += fx / vPar[collpartner_1].mass;
+			vPar[collpartner_1].vy += fy / vPar[collpartner_1].mass;
+			vPar[collpartner_2].vx -= fx / vPar[collpartner_2].mass;
+			vPar[collpartner_2].vy -= fy / vPar[collpartner_2].mass;
+
 		}
 		else if (coll_with_particle == false && coll_with_wall == true) {
 			switch (wall) {
@@ -323,7 +330,7 @@ vector<Particle> collision(vector<Particle> vPar, double dt, CImg<unsigned char>
 	}
 	else if (colltime >= dt) { //Update positions and velocities using dt
 		for (int i = 0; i < vPar.size(); i++) {
-			vPar[i].move(dt);
+			vPar[i].move(dt, gravity);
 		}
 	}
 	return vPar;
