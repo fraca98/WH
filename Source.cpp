@@ -6,12 +6,7 @@
 using namespace std;
 using namespace cimg_library;
 
-
-
-
 //Functions declared before
-Particle random_Particle(CImg<unsigned char> img, vector<Particle> vPar);
-bool verify_position(Particle newPar, CImg<unsigned char> img, vector<Particle> vPar);
 vector<Particle> collision(vector<Particle> vPar, double dt, CImg<unsigned char> img, double gravity);
 
 
@@ -19,19 +14,17 @@ vector<Particle> collision(vector<Particle> vPar, double dt, CImg<unsigned char>
 int main() {
 
 	// Initial settings
-	int dt = 1;  //delta_time
+	double dt = 1; //delta time to display (timestep)
 
-	int changeR = 5; // Reducing/Increasing radius particle
-
-	double gravity = 0; // default gravity
+	double gravity = -1; // default gravity
 	double deltagrav = 0.1;
+
+	int changeR = 1; //changing in radius (inc/dec size)
 
 	unsigned int w = 500; // Image width
 	unsigned int h = 500; // Image height
 
-	unsigned char red[] = { 255, 0, 0 }; // Color Particle
-
-	int numbRandParticle = 10;
+	int numPart = 100; //Number of particles in arena on start (if i select the correct option)
 
 	/*-----------------------------------------------------------*/
 
@@ -57,10 +50,15 @@ int main() {
 			exitloop = true;
 			break;
 		case 1:
-			for (int i = 0; i < cimg::rand(1, numbRandParticle); i++) {
-				Particle newPar = random_Particle(img, vPar);
-				vPar.push_back(newPar);
-				img.draw_circle(newPar.xc, newPar.yc, newPar.radius, red);
+			for (int i = 0; i < numPart; i++) {
+				while (true) {
+					Particle randPar = Particle(img);
+					if (randPar.verifyPosition(img, vPar)) {
+						vPar.push_back(randPar);
+						img = randPar.draw(img);
+						break;
+					}
+				}
 			}
 			exitloop = true;
 			break;
@@ -71,71 +69,84 @@ int main() {
 
 		if (exitloop) break;
 	}
-
-	img.draw_circle(0, 0, 1, red);
-
 	dsp.display(img); //display img
 
 
 	while (!dsp.is_closed() && !dsp.is_keyESC()) {
 
 		if (dsp.button() && dsp.mouse_x() >= 0 && dsp.mouse_y() >= 0) {
-			//cout << "CLICK\n";
 			//cout << dsp.mouse_x() << endl;
 			//cout << dsp.mouse_y() << endl;
-
 			Particle par(dsp.mouse_x(), dsp.mouse_y()); //create a particle from mouse click
-			bool valid = verify_position(par, img, vPar);
-
-			if (valid) {
+			if (par.verifyPosition(img,vPar)) {
 				vPar.push_back(par); // add to the vector
-				img.draw_circle(par.xc, par.yc, par.radius, red);
+				par.draw(img);
 			}
-
 			dsp.set_button(); //avoid multiple clicks: set mouse click as released
 		}
 
-
 		// Higher gravity
 		else if (dsp.is_keyP()) {
-			std::cout << "P: Higher gravity\n";
+			cout << "P: Higher gravity\n";
 			gravity = gravity + deltagrav;
 			dsp.set_key(); //avoid multiple clicks: set keyboard key as released
 		}
 		// Lower gravity
 		else if (dsp.is_keyO()) {
-			std::cout << "O: Less gravity\n";
+			cout << "O: Less gravity\n";
 			gravity = gravity - deltagrav;
 			dsp.set_key(); //avoid multiple clicks: set keyboard key as released
 		}
 
 		// Increase size of particles
 		else if (dsp.is_keyU() && !vPar.empty()) {
-			std::cout << "U: Increase size\n";
+			cout << "U: Increase size\n";
 			img = bg;
+			bool errorinc = false;
+			vector<Particle> bigVpar; //vector with updated radius
 			for (int i = 0; i < vPar.size(); i++) {
-				vector<Particle> copyVpar = vPar; //copy to check
-				copyVpar.erase(copyVpar.begin() + i);
 				Particle incPar = vPar[i];
-				incPar.radius = incPar.radius + 5;
+				incPar.increaseRM(changeR);
 
-				vPar[i] = (verify_position(incPar, img, copyVpar)) ? incPar : vPar[i];
-				img.draw_circle(vPar[i].xc, vPar[i].yc, vPar[i].radius, red);
+				vector<Particle> copyVpar = vPar; //copy to check and remove the particle that i analyzie every cycle
+				copyVpar.erase(copyVpar.begin() + i);
+
+				errorinc = !incPar.verifyPosition(img, copyVpar);
+				if (errorinc) break;
+				else bigVpar.push_back(incPar);
+			}
+			if (errorinc) {
+				cout << "Can't increase more the size\n";
+			}
+			else {
+				vPar = bigVpar;
+				for (int i = 0; i < vPar.size(); i++) {
+					vPar[i].draw(img);
+				}
 			}
 			dsp.set_key(); //avoid multiple clicks: set keyboard key as released
 		}
 		// Reduce dimension of particles
 		else if (dsp.is_keyI() && !vPar.empty()) {
-			std::cout << "I: Decrease size\n";
+			cout << "I: Decrease size\n";
 			img = bg;
-			for (int i = 0; i < vPar.size(); i++) {
-				vPar[i].updateRadMass(1, changeR);
-				img.draw_circle(vPar[i].xc, vPar[i].yc, vPar[i].radius, red);
+			bool errordec = false;
+			vector<Particle> copyVpar = vPar;
+			for (int i = 0; i < copyVpar.size(); i++) {
+				errordec = copyVpar[i].reduceRM(changeR);
+				if (errordec) break;
+			}
+			if (errordec) {
+				cout << "Can't decrease more the size\n";
+			}
+			else {
+				vPar = copyVpar;
+				for (int i = 0; i < vPar.size(); i++) {
+					vPar[i].draw(img);
+				}
 			}
 			dsp.set_key(); //avoid multiple clicks: set keyboard key as released
 		}
-
-
 		// Animation Controller
 		else {
 			img = bg;
@@ -143,58 +154,14 @@ int main() {
 			{
 				vPar = collision(vPar, dt, img, gravity);
 				for (int i = 0; i < vPar.size(); i++) {
-					img.draw_circle(vPar[i].xc, vPar[i].yc, vPar[i].radius, red);
+					img = vPar[i].draw(img);
 				}
 			}
 
 		}
 		// Display
-		dsp.display(img).wait(1000 / 60); //wait to slow down velocity of rendering7
-		cout << "DISPLAY" << endl;
-	};
-
-}
-
-
-
-Particle random_Particle(CImg <unsigned char> img, vector<Particle> vPar) { //Function to generate random particle at the beginning
-	while (true) {
-		Particle randPar(cimg::rand(0, img.width()), cimg::rand(0, img.height()));
-		if (verify_position(randPar, img, vPar)) return randPar;
+		dsp.display(img).wait(20);
 	}
-}
-
-bool verify_position(Particle newPar, CImg<unsigned char> img, vector<Particle> vPar) { //Function to check if particle generated (both random, inserted) is valid or not
-	//Check if particle is in the box
-	if (newPar.xc - newPar.radius < 0 || newPar.xc + newPar.radius > img.width() || newPar.yc - newPar.radius < 0 || newPar.yc + newPar.radius > img.height()) {
-		return false;
-	}
-
-	// Check if overlaps with other existing particles:
-	// Two circles intersect if, and only if, the distance between their centers is between the sum and the difference of their radii.
-	for (Particle i : vPar) {
-		double d = sqrt(pow(newPar.xc - i.xc, 2) + pow(newPar.yc - i.yc, 2));
-		if (d <= newPar.radius - i.radius) {
-			//cout << "Circle B is inside A\n";
-			return false;
-		}
-		else if (d <= i.radius - newPar.radius) {
-			//cout << "Circle A is inside B\n";
-			return false;
-		}
-		else if (d < newPar.radius + i.radius) {
-			//cout << "Circle intersect to each other\n";
-			return false;
-		}
-		else if (d == newPar.radius + i.radius) {
-			//cout << "Circle touch to each other\n";
-			return false;
-		}
-		else {
-			//cout << "Circle not touch to each other\n";
-		}
-	}
-	return true;
 }
 
 vector<Particle> collision(vector<Particle> vPar, double dt, CImg<unsigned char> img, double gravity) {
@@ -202,7 +169,7 @@ vector<Particle> collision(vector<Particle> vPar, double dt, CImg<unsigned char>
 	double collpartner_1;
 	double collpartner_2;
 	int wall;
-	double colltime = numeric_limits<int>::max();
+	double colltime = numeric_limits<double>::max();
 	double colltime_particle = colltime;
 	bool coll_with_wall = false;
 	bool coll_with_particle = false;
@@ -210,13 +177,10 @@ vector<Particle> collision(vector<Particle> vPar, double dt, CImg<unsigned char>
 	// Checking collision time with particles in main domain
 	for (int i = 0; i < vPar.size(); i++) {
 		for (int j = i + 1; j < vPar.size(); j++) {
-			int rab[2] = { vPar[j].xc - vPar[i].xc, vPar[j].yc - vPar[i].yc };
+			double rab[2] = { vPar[j].xc - vPar[i].xc, vPar[j].yc - vPar[i].yc };
 			double vab[2] = { vPar[j].vx - vPar[i].vx, vPar[j].vy - vPar[i].vy };
-
 			double sigma = vPar[i].radius + vPar[j].radius;
-
 			double dvdr = rab[0] * vab[0] + rab[1] * vab[1];
-
 			if (dvdr >= 0) colltime_particle = numeric_limits<int>::max();
 			else {
 				double dvdv = vab[0] * vab[0] + vab[1] * vab[1];
@@ -225,7 +189,6 @@ vector<Particle> collision(vector<Particle> vPar, double dt, CImg<unsigned char>
 				if (d < 0) colltime_particle = numeric_limits<int>::max();
 				else colltime_particle = -(dvdr + sqrt(d)) / dvdv;
 			}
-
 			if (colltime_particle < colltime && colltime_particle >= 0) { //Collision with particle
 				colltime = colltime_particle;
 				collpartner_1 = i;
@@ -234,16 +197,14 @@ vector<Particle> collision(vector<Particle> vPar, double dt, CImg<unsigned char>
 				coll_with_particle = true;
 			}
 		}
-
 		double colltime_R_wallX = (img.width() - 1 - vPar[i].radius - vPar[i].xc) / (vPar[i].vx + 1e-20);
-		if (colltime_R_wallX >= 0 && colltime_R_wallX <= colltime && vPar[i].vx>0) {
+		if (colltime_R_wallX >= 0 && colltime_R_wallX <= colltime && vPar[i].vx > 0) {
 			colltime = colltime_R_wallX;
 			collpartner_1 = i;
 			wall = 1;
 			coll_with_wall = true;
 			coll_with_particle = false;
 		}
-
 		double colltime_L_wallX = -(vPar[i].xc - vPar[i].radius) / (vPar[i].vx + 1e-20);
 		if (colltime_L_wallX >= 0 && colltime_L_wallX <= colltime && vPar[i].vx < 0) {
 			colltime = colltime_L_wallX;
@@ -253,7 +214,15 @@ vector<Particle> collision(vector<Particle> vPar, double dt, CImg<unsigned char>
 			coll_with_particle = false;
 		}
 
-		double colltime_U_wallY = (img.height() - 1 - vPar[i].yc - vPar[i].radius) / (vPar[i].vy + 1e-20); //qua sistemare per moto accelerato
+		double colltime_U_wallY = -1;
+		if (gravity == 0) {
+			colltime_U_wallY = (img.height() - 1 - vPar[i].yc - vPar[i].radius) / (vPar[i].vy + 1e-20);
+		}
+		else {
+			colltime_U_wallY = (-vPar[i].vy + sqrt(pow(vPar[i].vy, 2) - 4 * 0.5 * gravity * (vPar[i].yc - (img.width() - 1) + vPar[i].radius))) / gravity;
+			cout << colltime_U_wallY << endl;
+		}
+
 		if (colltime_U_wallY >= 0 && colltime_U_wallY <= colltime && vPar[i].vy > 0) {
 			colltime = colltime_U_wallY;
 			collpartner_1 = i;
@@ -262,7 +231,14 @@ vector<Particle> collision(vector<Particle> vPar, double dt, CImg<unsigned char>
 			coll_with_particle = false;
 		}
 
-		double colltime_H_wallY = -(vPar[i].yc - vPar[i].radius) / (vPar[i].vy + 1e-20); //qua sistemare per moto accelerato
+		double colltime_H_wallY = -1;
+		if (gravity == 0) {
+
+		}
+		else {
+
+		}
+		colltime_H_wallY = -(vPar[i].yc - vPar[i].radius) / (vPar[i].vy + 1e-20);
 		if (colltime_H_wallY >= 0 && colltime_H_wallY <= colltime && vPar[i].vy < 0) {
 			colltime = colltime_H_wallY;
 			collpartner_1 = i;
@@ -272,23 +248,12 @@ vector<Particle> collision(vector<Particle> vPar, double dt, CImg<unsigned char>
 		}
 	}
 
-	if (coll_with_particle) {
-		cout << "------------\n";
-		cout << colltime << endl;
-		cout << collpartner_1 << endl;
-		cout << collpartner_2 << endl;
-		cout << "VEL1:" << vPar[collpartner_1].vx << "|" << vPar[collpartner_1].vy << endl;
-		cout << "VEL2:" << vPar[collpartner_2].vx << "|" << vPar[collpartner_2].vy << endl;
-		cout << "------------\n";
-		//system("PAUSE");
-	}
-
-	// Update positions and velocities
+	// Update positions and velocities (elastic collision)
 	if (colltime < dt) {
 		for (int i = 0; i < vPar.size(); i++) {
 			vPar[i].move(colltime, gravity);
 		}
-		if (coll_with_particle) { 
+		if (coll_with_particle) {
 
 			double dx = vPar[collpartner_2].xc - vPar[collpartner_1].xc;
 			double dy = vPar[collpartner_2].yc - vPar[collpartner_1].yc;
