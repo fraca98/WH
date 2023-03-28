@@ -16,7 +16,7 @@ int main() {
 	// Initial settings
 	double dt = 1; //delta time to display (timestep)
 
-	double gravity = -1; // default gravity
+	double gravity = 0; // default gravity
 	double deltagrav = 0.1;
 
 	int changeR = 1; //changing in radius (inc/dec size)
@@ -41,15 +41,13 @@ int main() {
 	/*-----------------------------------------------------------*/
 	// Staring: decide if empty space or with particles
 	cout << "Select if you want an empty space or already with particles:\n0: Empty\n1: Particles\nEnter your choice: ";
-	int start;
+	string start;
 	while (true) {
-		bool exitloop = false;
 		cin >> start;
-		switch (start) {
-		case 0:
-			exitloop = true;
+		if (start == "0") {
 			break;
-		case 1:
+		}
+		else if (start == "1") {
 			for (int i = 0; i < numPart; i++) {
 				while (true) {
 					Particle randPar = Particle(img);
@@ -60,14 +58,9 @@ int main() {
 					}
 				}
 			}
-			exitloop = true;
-			break;
-		default:
-			cout << "Select something valid: ";
 			break;
 		}
-
-		if (exitloop) break;
+		else cout << "Select something valid: ";
 	}
 	dsp.display(img); //display img
 
@@ -78,9 +71,9 @@ int main() {
 			//cout << dsp.mouse_x() << endl;
 			//cout << dsp.mouse_y() << endl;
 			Particle par(dsp.mouse_x(), dsp.mouse_y()); //create a particle from mouse click
-			if (par.verifyPosition(img,vPar)) {
+			if (par.verifyPosition(img, vPar)) {
 				vPar.push_back(par); // add to the vector
-				par.draw(img);
+				img = par.draw(img);
 			}
 			dsp.set_button(); //avoid multiple clicks: set mouse click as released
 		}
@@ -107,13 +100,16 @@ int main() {
 			for (int i = 0; i < vPar.size(); i++) {
 				Particle incPar = vPar[i];
 				incPar.increaseRM(changeR);
-
-				vector<Particle> copyVpar = vPar; //copy to check and remove the particle that i analyzie every cycle
-				copyVpar.erase(copyVpar.begin() + i);
-
-				errorinc = !incPar.verifyPosition(img, copyVpar);
-				if (errorinc) break;
-				else bigVpar.push_back(incPar);
+				bigVpar.push_back(incPar);
+			}
+			for (int i = 0; i < vPar.size(); i++) {
+				vector<Particle> bigWI;
+				bigWI = bigVpar;
+				bigWI.erase(bigWI.begin() + i);
+				if (bigVpar[i].verifyPosition(img, bigWI) == false) {
+					errorinc = true;
+					break;
+				}
 			}
 			if (errorinc) {
 				cout << "Can't increase more the size\n";
@@ -121,7 +117,7 @@ int main() {
 			else {
 				vPar = bigVpar;
 				for (int i = 0; i < vPar.size(); i++) {
-					vPar[i].draw(img);
+					img = vPar[i].draw(img);
 				}
 			}
 			dsp.set_key(); //avoid multiple clicks: set keyboard key as released
@@ -174,6 +170,17 @@ vector<Particle> collision(vector<Particle> vPar, double dt, CImg<unsigned char>
 	bool coll_with_wall = false;
 	bool coll_with_particle = false;
 
+	for (int i = 0; i < vPar.size(); i++) {
+		Particle incPar = vPar[i];
+		vector<Particle> copyVpar = vPar; //copy to check and remove the particle that i analyzie every cycle
+		copyVpar.erase(copyVpar.begin() + i);
+
+		if (incPar.verifyPosition(img, copyVpar) == false) {
+			cout << "ERR\n";
+			system("PAUSE");
+		};
+	}
+
 	// Checking collision time with particles in main domain
 	for (int i = 0; i < vPar.size(); i++) {
 		for (int j = i + 1; j < vPar.size(); j++) {
@@ -220,10 +227,9 @@ vector<Particle> collision(vector<Particle> vPar, double dt, CImg<unsigned char>
 		}
 		else {
 			colltime_U_wallY = (-vPar[i].vy + sqrt(pow(vPar[i].vy, 2) - 4 * 0.5 * gravity * (vPar[i].yc - (img.width() - 1) + vPar[i].radius))) / gravity;
-			cout << colltime_U_wallY << endl;
 		}
 
-		if (colltime_U_wallY >= 0 && colltime_U_wallY <= colltime && vPar[i].vy > 0) {
+		if (colltime_U_wallY >= 0 && colltime_U_wallY <= colltime && vPar[i].yc && vPar[i].vy > 0) {
 			colltime = colltime_U_wallY;
 			collpartner_1 = i;
 			wall = 2;
@@ -251,7 +257,7 @@ vector<Particle> collision(vector<Particle> vPar, double dt, CImg<unsigned char>
 	// Update positions and velocities (elastic collision)
 	if (colltime < dt) {
 		for (int i = 0; i < vPar.size(); i++) {
-			vPar[i].move(colltime, gravity);
+			vPar[i].move(colltime - 1e-4, gravity); //introduce this little error to prevent particle to collide exactly (else possible case of intersection due to double to int)
 		}
 		if (coll_with_particle) {
 
@@ -286,6 +292,7 @@ vector<Particle> collision(vector<Particle> vPar, double dt, CImg<unsigned char>
 				break;
 			case 2:
 				vPar[collpartner_1].vy *= -1;
+				//vPar[collpartner_1].yc = img.height()-1- vPar[collpartner_1].radius;
 				break;
 			case 3:
 				vPar[collpartner_1].vx *= -1;
