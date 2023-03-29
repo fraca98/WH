@@ -25,8 +25,8 @@ public:
 		xc = xpos;
 		yc = ypos;
 		radius = round(cimg::rand(5, 10));
-		vx = cimg::rand(-1, 1);
 		vy = cimg::rand(-1, 1);
+		vx = cimg::rand(-1, 1);
 		mass = 4.0 / 3.0 * cimg::PI * pow(radius, 3) * density;
 		color[0] = cimg::rand(0, 255);
 		color[1] = cimg::rand(0, 255);

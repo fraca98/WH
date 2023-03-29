@@ -17,7 +17,7 @@ int main() {
 	double dt = 1; //delta time to display (timestep)
 
 	double gravity = 0; // default gravity
-	double deltagrav = 0.1;
+	double deltagrav = 0;
 
 	int changeR = 1; //changing in radius (inc/dec size)
 
@@ -74,6 +74,10 @@ int main() {
 			if (par.verifyPosition(img, vPar)) {
 				vPar.push_back(par); // add to the vector
 				img = par.draw(img);
+				cout << "Generated particle\n";
+			}
+			else {
+				cout << "Generated particle doesn't fit the position\n";
 			}
 			dsp.set_button(); //avoid multiple clicks: set mouse click as released
 		}
@@ -170,17 +174,6 @@ vector<Particle> collision(vector<Particle> vPar, double dt, CImg<unsigned char>
 	bool coll_with_wall = false;
 	bool coll_with_particle = false;
 
-	for (int i = 0; i < vPar.size(); i++) {
-		Particle incPar = vPar[i];
-		vector<Particle> copyVpar = vPar; //copy to check and remove the particle that i analyzie every cycle
-		copyVpar.erase(copyVpar.begin() + i);
-
-		if (incPar.verifyPosition(img, copyVpar) == false) {
-			cout << "ERR\n";
-			system("PAUSE");
-		};
-	}
-
 	// Checking collision time with particles in main domain
 	for (int i = 0; i < vPar.size(); i++) {
 		for (int j = i + 1; j < vPar.size(); j++) {
@@ -204,16 +197,19 @@ vector<Particle> collision(vector<Particle> vPar, double dt, CImg<unsigned char>
 				coll_with_particle = true;
 			}
 		}
-		double colltime_R_wallX = (img.width() - 1 - vPar[i].radius - vPar[i].xc) / (vPar[i].vx + 1e-20);
-		if (colltime_R_wallX >= 0 && colltime_R_wallX <= colltime && vPar[i].vx > 0) {
+
+		double colltime_R_wallX = -1;
+		if (vPar[i].vx > 0) colltime_R_wallX = (img.width() - 1 - vPar[i].radius - vPar[i].xc) / (vPar[i].vx);
+		if (colltime_R_wallX >= 0 && colltime_R_wallX <= colltime) {
 			colltime = colltime_R_wallX;
 			collpartner_1 = i;
 			wall = 1;
 			coll_with_wall = true;
 			coll_with_particle = false;
 		}
-		double colltime_L_wallX = -(vPar[i].xc - vPar[i].radius) / (vPar[i].vx + 1e-20);
-		if (colltime_L_wallX >= 0 && colltime_L_wallX <= colltime && vPar[i].vx < 0) {
+		double colltime_L_wallX = -1;
+		if (vPar[i].vx < 0) colltime_L_wallX = -(vPar[i].xc - vPar[i].radius) / (vPar[i].vx + 1e-20);
+		if (colltime_L_wallX >= 0 && colltime_L_wallX <= colltime) {
 			colltime = colltime_L_wallX;
 			collpartner_1 = i;
 			wall = 3;
@@ -223,13 +219,17 @@ vector<Particle> collision(vector<Particle> vPar, double dt, CImg<unsigned char>
 
 		double colltime_U_wallY = -1;
 		if (gravity == 0) {
-			colltime_U_wallY = (img.height() - 1 - vPar[i].yc - vPar[i].radius) / (vPar[i].vy + 1e-20);
+			if(vPar[i].vy > 0) colltime_U_wallY = (img.height() - 1 - vPar[i].yc - vPar[i].radius) / (vPar[i].vy + 1e-20);
 		}
 		else {
-			colltime_U_wallY = (-vPar[i].vy + sqrt(pow(vPar[i].vy, 2) - 4 * 0.5 * gravity * (vPar[i].yc - (img.width() - 1) + vPar[i].radius))) / gravity;
+			double sol1 = (-vPar[i].vy + sqrt(pow(vPar[i].vy, 2) - 4 * 0.5 * gravity * (vPar[i].yc - (img.width() - 1) + vPar[i].radius))) / gravity;
+			double sol2 = (-vPar[i].vy - sqrt(pow(vPar[i].vy, 2) - 4 * 0.5 * gravity * (vPar[i].yc - (img.width() - 1) + vPar[i].radius))) / gravity;
+			if (sol1 == sol2) colltime_U_wallY = sol1;
+			else if (sol1 > 0)  colltime_U_wallY = sol1;
+			else if (sol2 > 0)  colltime_U_wallY = sol2;
+			else {}
 		}
-
-		if (colltime_U_wallY >= 0 && colltime_U_wallY <= colltime && vPar[i].yc && vPar[i].vy > 0) {
+		if (colltime_U_wallY >= 0 && colltime_U_wallY <= colltime && vPar[i].yc) {
 			colltime = colltime_U_wallY;
 			collpartner_1 = i;
 			wall = 2;
@@ -239,13 +239,17 @@ vector<Particle> collision(vector<Particle> vPar, double dt, CImg<unsigned char>
 
 		double colltime_H_wallY = -1;
 		if (gravity == 0) {
-
+			if(vPar[i].vy<0) colltime_H_wallY = -(vPar[i].yc - vPar[i].radius) / (vPar[i].vy);
 		}
 		else {
-
+			double sol1 = (-vPar[i].vy + sqrt(pow(vPar[i].vy, 2) - 4 * 0.5 * gravity * (vPar[i].yc - vPar[i].radius))) / gravity;
+			double sol2 = (-vPar[i].vy - sqrt(pow(vPar[i].vy, 2) - 4 * 0.5 * gravity * (vPar[i].yc - vPar[i].radius))) / gravity;
+			if (sol1 == sol2) colltime_H_wallY = sol1;
+			else if (sol1 > 0)  colltime_H_wallY = sol1;
+			else if (sol2 > 0)  colltime_H_wallY = sol2;
+			else {}
 		}
-		colltime_H_wallY = -(vPar[i].yc - vPar[i].radius) / (vPar[i].vy + 1e-20);
-		if (colltime_H_wallY >= 0 && colltime_H_wallY <= colltime && vPar[i].vy < 0) {
+		if (colltime_H_wallY >= 0 && colltime_H_wallY <= colltime) {
 			colltime = colltime_H_wallY;
 			collpartner_1 = i;
 			wall = 0;
